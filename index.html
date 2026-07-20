@@ -158,6 +158,13 @@
     flex: 1; padding: 8px 10px; font-size: clamp(18px, 2.6vw, 32px); text-align: right;
     border: 1px solid var(--border); border-radius: 8px; width: 100%;
   }
+  #tenderedClear {
+    align-self: stretch; width: 52px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--panel);
+    color: var(--danger); font-size: 12px; font-weight: 700; cursor: pointer;
+    padding: 0; white-space: nowrap;
+  }
+  #tenderedClear:hover { background: #fef2f2; border-color: var(--danger); }
   .quick-cash { display: flex; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
   .quick-cash button {
     flex: 1; padding: 10px 6px; font-size: 15px; font-weight: 600;
@@ -295,6 +302,7 @@
       <div class="tendered-row">
         <label>お預かり</label>
         <input type="number" id="tendered" placeholder="0" min="0" inputmode="numeric">
+        <button id="tenderedClear" title="お預かりをクリア">クリア</button>
       </div>
       <div class="quick-cash">
         <button data-amount="50">¥50</button>
@@ -525,6 +533,11 @@ function updateChange() {
 }
 
 document.getElementById('tendered').addEventListener('input', updateChange);
+
+document.getElementById('tenderedClear').addEventListener('click', () => {
+  document.getElementById('tendered').value = '';
+  updateChange();
+});
 
 document.querySelectorAll('.quick-cash button').forEach(btn => {
   btn.addEventListener('click', () => {
