@@ -2,7 +2,11 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="簡易レジ">
+<meta name="theme-color" content="#f4f5f7">
 <title>簡易レジ</title>
 <style>
   :root {
@@ -17,11 +21,13 @@
     --border: #e5e7eb;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
   body {
     font-family: "Hiragino Sans", "Yu Gothic UI", "Meiryo", sans-serif;
     background: var(--bg);
     color: var(--text);
-    height: 100vh;
+    min-height: 100vh;
+    min-height: 100dvh;
     display: flex;
     flex-direction: column;
   }
@@ -40,8 +46,7 @@
     display: grid;
     grid-template-columns: 1fr;
     gap: 16px;
-    padding: 16px;
-    overflow-y: auto;
+    padding: 16px 16px calc(100px + env(safe-area-inset-bottom));
   }
   .panel {
     background: var(--panel);
@@ -128,9 +133,9 @@
   .cart-item .unit { color: var(--muted); font-size: 12px; }
   .qty-controls { display: flex; align-items: center; gap: 6px; }
   .qty-controls button {
-    width: 26px; height: 26px; border-radius: 6px;
+    width: 44px; height: 40px; border-radius: 8px;
     border: 1px solid var(--border); background: var(--panel);
-    cursor: pointer; font-size: 14px; line-height: 1;
+    cursor: pointer; font-size: 18px; line-height: 1;
   }
   .qty-controls button:hover { background: var(--bg); }
   .qty { min-width: 24px; text-align: center; font-weight: 600; }
@@ -161,12 +166,6 @@
     min-width: 68px;
   }
   .quick-cash button:hover { background: var(--bg); }
-  .change-row {
-    display: flex; justify-content: space-between; align-items: center;
-    font-size: clamp(18px, 2.8vw, 36px); font-weight: 700; padding: 6px 0;
-  }
-  .change-row .negative { color: var(--danger); }
-  .change-row .ok { color: var(--success); }
   .btn {
     width: 100%; padding: 14px; font-size: 16px; font-weight: 700;
     border: none; border-radius: 10px; cursor: pointer;
@@ -242,9 +241,23 @@
     display: flex; flex-wrap: wrap; align-content: flex-start; gap: 8px;
     padding: 8px 16px;
   }
-  .checkout-row { display: flex; align-items: center; gap: 12px; }
-  .checkout-row .change-row { flex: 1; }
-  .checkout-row .btn { width: auto; flex: 1; padding: 12px; }
+  /* 固定会計バー */
+  #checkoutBar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+    display: flex; align-items: center; gap: 20px;
+    background: var(--panel); border-top: 1px solid var(--border);
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, .08);
+  }
+  .cb-item { display: flex; flex-direction: column; min-width: 0; }
+  .cb-label { font-size: 11px; color: var(--muted); font-weight: 600; }
+  .cb-amount {
+    font-size: clamp(22px, 3.2vw, 38px); font-weight: 700;
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  .cb-amount.negative { color: var(--danger); }
+  .cb-amount.ok { color: var(--success); }
+  #checkoutBar .btn { flex: 1; margin-left: auto; padding: 14px; max-width: 45%; }
 </style>
 </head>
 <body>
@@ -277,12 +290,11 @@
     <div class="totals">
       <div class="row muted"><span>小計(税抜)</span><span id="subtotal">¥0</span></div>
       <div id="taxRows"></div>
-      <div class="row grand"><span>合計</span><span id="grandTotal">¥0</span></div>
     </div>
     <div class="checkout-area">
       <div class="tendered-row">
         <label>お預かり</label>
-        <input type="number" id="tendered" placeholder="0" min="0">
+        <input type="number" id="tendered" placeholder="0" min="0" inputmode="numeric">
       </div>
       <div class="quick-cash">
         <button data-amount="50">¥50</button>
@@ -293,13 +305,15 @@
         <button data-amount="10000">¥10,000</button>
         <button data-amount="exact">ちょうど</button>
       </div>
-      <div class="checkout-row">
-        <div class="change-row"><span>お釣り</span><span id="change">¥0</span></div>
-        <button class="btn btn-primary" id="checkoutBtn" disabled>会計する</button>
-      </div>
     </div>
   </section>
 </main>
+
+<div id="checkoutBar">
+  <div class="cb-item"><span class="cb-label">合計</span><span class="cb-amount" id="grandTotal">¥0</span></div>
+  <div class="cb-item"><span class="cb-label">お釣り</span><span class="cb-amount ok" id="change">¥0</span></div>
+  <button class="btn btn-primary" id="checkoutBtn" disabled>会計する</button>
+</div>
 
 <dialog id="productDialog">
   <h2>商品を追加</h2>
@@ -506,7 +520,7 @@ function updateChange() {
   const change = tendered - t.total;
   const el = document.getElementById('change');
   el.textContent = yen(Math.abs(change)) + (change < 0 && tendered > 0 ? ' 不足' : '');
-  el.className = change < 0 ? 'negative' : 'ok';
+  el.className = 'cb-amount ' + (change < 0 ? 'negative' : 'ok');
   document.getElementById('checkoutBtn').disabled = cart.length === 0 || tendered < t.total;
 }
 
