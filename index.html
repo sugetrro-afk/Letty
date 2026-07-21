@@ -517,14 +517,22 @@ function layoutProductGrid() {
   if (n === 0) { grid.style.gridTemplateColumns = ''; grid.style.gridTemplateRows = ''; return; }
   const W = grid.clientWidth || 1;
   const H = grid.clientHeight || 1;
-  // タイルの縦横比の目安(横長)。横型は枠が細いので、より横長寄りにして段組みを抑える
-  const aspect = document.body.classList.contains('layout-wide') ? 1.8 : 1.3;
-  let cols = Math.max(1, Math.round(Math.sqrt(n * W / (H * aspect))));
-  cols = Math.min(cols, n);
-  const rows = Math.ceil(n / cols);
-  grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-  grid.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
-  const tileH = H / rows;
+  const wide = document.body.classList.contains('layout-wide') && window.innerWidth > 600;
+  let cols, rows;
+  if (wide) {
+    // 横型はお会計欄と同じく2列固定。上の段から順に埋める
+    cols = Math.min(2, n);
+    rows = Math.ceil(n / cols);
+    grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+    grid.style.gridTemplateRows = `repeat(${Math.max(rows, 2)}, minmax(0, 1fr))`;
+  } else {
+    const aspect = 1.3; // タイルの縦横比の目安(横長)
+    cols = Math.min(Math.max(1, Math.round(Math.sqrt(n * W / (H * aspect)))), n);
+    rows = Math.ceil(n / cols);
+    grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+    grid.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+  }
+  const tileH = H / Math.max(rows, wide ? 2 : 1);
   const font = Math.max(11, Math.min(24, Math.floor(tileH * 0.16)));
   grid.style.setProperty('--tile-font', font + 'px');
 }
