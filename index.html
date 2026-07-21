@@ -248,6 +248,14 @@
     transition: transform .2s ease;
   }
   dialog::backdrop { background: rgba(0,0,0,.3); }
+  /* キーボード表示中は縦の余白を詰めて、隠れにくくする */
+  body.keyboard-open dialog { padding: 12px 16px; }
+  body.keyboard-open dialog h2 { margin-bottom: 8px; }
+  body.keyboard-open dialog .field { margin-bottom: 7px; }
+  body.keyboard-open dialog input,
+  body.keyboard-open dialog select { padding: 6px 10px; }
+  body.keyboard-open dialog .actions { margin-top: 10px; }
+  body.keyboard-open dialog .actions .btn { padding: 8px; }
   dialog h2 { font-size: 16px; margin-bottom: 14px; }
   dialog .field { margin-bottom: 12px; }
   dialog label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
@@ -825,13 +833,31 @@ function updateKeyboardShift() {
   const vv = window.visualViewport;
   const openDialog = document.querySelector('dialog[open]');
   if (!vv || !openDialog) {
+    document.body.classList.remove('keyboard-open');
     document.documentElement.style.setProperty('--kb-shift', '0px');
     return;
   }
-  // 画面下部に隠れている高さ(≒キーボードの高さ)
+  // 画面下部に隠れている高さ(≒キーボード + 予測変換バー)
   const hidden = Math.max(0, window.innerHeight - (vv.height + vv.offsetTop));
-  // 隠れた分の半分だけ上げると、見えている領域の中央に収まる
-  document.documentElement.style.setProperty('--kb-shift', Math.round(hidden / 2) + 'px');
+  if (hidden < 40) {
+    document.body.classList.remove('keyboard-open');
+    document.documentElement.style.setProperty('--kb-shift', '0px');
+    return;
+  }
+  // キーボード表示中はポップアップを詰めて表示(高さを測る前に適用する)
+  document.body.classList.add('keyboard-open');
+  // 予測変換バーの高さが読めない分の余裕
+  const GAP = 56;
+  // ずらす前の位置は「画面中央」なので計算で求める(アニメーション中の実測値を避ける)
+  const h = openDialog.offsetHeight;
+  const baseTop = (window.innerHeight - h) / 2;
+  const baseBottom = baseTop + h;
+  const visibleBottom = window.innerHeight - hidden;
+  // 下端が見えている領域より上に来るまで持ち上げる(上端が画面外に出ない範囲で)
+  const needed = baseBottom - (visibleBottom - GAP);
+  const maxShift = Math.max(0, baseTop - 8);
+  const shift = Math.min(Math.max(0, needed), maxShift);
+  document.documentElement.style.setProperty('--kb-shift', Math.round(shift) + 'px');
 }
 
 if (window.visualViewport) {
