@@ -243,6 +243,9 @@
     width: 320px; max-width: calc(100vw - 32px);
     box-shadow: 0 10px 40px rgba(0,0,0,.2);
     position: fixed; inset: 0; margin: auto;
+    /* キーボード表示時は見えている領域の中央に寄せる(--kb-shift はJSが設定) */
+    transform: translateY(calc(var(--kb-shift, 0px) * -1));
+    transition: transform .2s ease;
   }
   dialog::backdrop { background: rgba(0,0,0,.3); }
   dialog h2 { font-size: 16px; margin-bottom: 14px; }
@@ -700,6 +703,7 @@ function openProductDialog(p) {
   document.getElementById('pPrice').value = p ? p.price : '';
   document.getElementById('pTax').value = p ? p.tax : '10';
   dialog.showModal();
+  updateKeyboardShift();
 }
 
 document.getElementById('addProductBtn').addEventListener('click', () => openProductDialog(null));
@@ -757,6 +761,7 @@ document.getElementById('historyBtn').addEventListener('click', () => {
   showHistory = true;
   renderHistory();
   historyDialog.showModal();
+  updateKeyboardShift();
 });
 document.getElementById('historyClose').addEventListener('click', () => {
   showHistory = false;
@@ -814,6 +819,30 @@ function measureChrome() {
 }
 window.addEventListener('resize', () => { measureChrome(); tick(); });
 measureChrome();
+
+// ソフトキーボードが出たとき、ポップアップが隠れないよう見えている領域の中央へ持ち上げる
+function updateKeyboardShift() {
+  const vv = window.visualViewport;
+  const openDialog = document.querySelector('dialog[open]');
+  if (!vv || !openDialog) {
+    document.documentElement.style.setProperty('--kb-shift', '0px');
+    return;
+  }
+  // 画面下部に隠れている高さ(≒キーボードの高さ)
+  const hidden = Math.max(0, window.innerHeight - (vv.height + vv.offsetTop));
+  // 隠れた分の半分だけ上げると、見えている領域の中央に収まる
+  document.documentElement.style.setProperty('--kb-shift', Math.round(hidden / 2) + 'px');
+}
+
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', updateKeyboardShift);
+  window.visualViewport.addEventListener('scroll', updateKeyboardShift);
+}
+document.addEventListener('focusin', updateKeyboardShift);
+document.addEventListener('focusout', () => setTimeout(updateKeyboardShift, 100));
+document.querySelectorAll('dialog').forEach(d => {
+  d.addEventListener('close', () => document.documentElement.style.setProperty('--kb-shift', '0px'));
+});
 
 applyLayout();
 renderProducts();
