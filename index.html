@@ -39,17 +39,28 @@
     justify-content: space-between;
     align-items: center;
   }
-  header h1 { font-size: 18px; }
-  header .clock { color: var(--muted); font-size: 14px; }
-  .header-right { display: flex; align-items: center; gap: 12px; }
+  header { flex-wrap: nowrap; gap: 8px; }
+  header h1 { font-size: 18px; white-space: nowrap; }
+  header .clock { color: var(--muted); font-size: 14px; white-space: nowrap; }
+  .header-right { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+
+  /* 狭い画面ではヘッダーを1行に収める */
+  @media (max-width: 560px) {
+    header { padding: 10px 12px; }
+    header h1 { font-size: 15px; }
+    header .clock { font-size: 11px; }
+    .header-right { gap: 8px; }
+    .header-right .small-btn { padding: 5px 8px; font-size: 12px; }
+  }
 
   /* 横型レイアウト: 左=商品 / 右=お会計 */
   body.layout-wide main {
     grid-template-columns: 1fr 1fr;
     align-items: stretch;
-  }
-  body.layout-wide main {
-    height: calc(100dvh - 60px - 84px - env(safe-area-inset-bottom));
+    /* ヘッダーと会計バーの実測値を使い、端末ごとの余白のズレをなくす */
+    flex: none;
+    height: calc(100dvh - var(--header-h, 60px) - var(--bar-h, 84px));
+    padding-bottom: 16px;
   }
   body.layout-wide .panel { height: 100%; min-height: 0; }
   body.layout-wide .panel-body { height: auto; flex: 1; }
@@ -286,6 +297,19 @@
   }
   .history-item .head { display: flex; justify-content: space-between; font-weight: 600; }
   .history-item .detail { color: var(--muted); margin-top: 2px; }
+
+  /* 画面が狭すぎるときは横型でも1カラムに戻す(iPhone縦持ちなど) */
+  @media (max-width: 600px) {
+    body.layout-wide main {
+      grid-template-columns: 1fr;
+      flex: 1;
+      height: auto;
+      padding-bottom: calc(100px + env(safe-area-inset-bottom));
+    }
+    body.layout-wide .panel { height: auto; }
+    body.layout-wide .panel-body { height: 34vh; flex: none; }
+    body.layout-wide .cart-items { display: flex; flex: none; max-height: 26vh; }
+  }
 
   .panel { min-height: 0; }
   .panel-body { height: 34vh; padding: 12px 16px; }
@@ -762,11 +786,26 @@ function renderHistory() {
 // ---- 時計 ----
 function tick() {
   const d = new Date();
-  document.getElementById('clock').textContent =
-    d.toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric', weekday:'short' }) +
-    ' ' + d.toLocaleTimeString('ja-JP');
+  const narrow = window.innerWidth <= 560;
+  const date = narrow
+    ? d.toLocaleDateString('ja-JP', { month:'numeric', day:'numeric', weekday:'short' })
+    : d.toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric', weekday:'short' });
+  const time = narrow
+    ? d.toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit' })
+    : d.toLocaleTimeString('ja-JP');
+  document.getElementById('clock').textContent = date + ' ' + time;
 }
 setInterval(tick, 1000); tick();
+
+// ヘッダーと固定会計バーの実測高さをCSSに渡す(端末ごとの余白ズレ防止)
+function measureChrome() {
+  const h = document.querySelector('header').offsetHeight;
+  const b = document.getElementById('checkoutBar').offsetHeight;
+  document.documentElement.style.setProperty('--header-h', h + 'px');
+  document.documentElement.style.setProperty('--bar-h', b + 'px');
+}
+window.addEventListener('resize', () => { measureChrome(); tick(); });
+measureChrome();
 
 applyLayout();
 renderProducts();
