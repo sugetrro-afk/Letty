@@ -710,8 +710,18 @@ function openProductDialog(p) {
   document.getElementById('pName').value = p ? p.name : '';
   document.getElementById('pPrice').value = p ? p.price : '';
   document.getElementById('pTax').value = p ? p.tax : '10';
-  dialog.showModal();
+  openDialogKeepingScroll(dialog);
   updateKeyboardShift();
+}
+
+// ダイアログを開くときにページがスクロールしないようにする
+function openDialogKeepingScroll(d) {
+  const y = window.scrollY;
+  const x = window.scrollX;
+  d.showModal();
+  // ブラウザによる自動フォーカス・スクロールを打ち消す
+  window.scrollTo(x, y);
+  requestAnimationFrame(() => window.scrollTo(x, y));
 }
 
 document.getElementById('addProductBtn').addEventListener('click', () => openProductDialog(null));
@@ -768,7 +778,7 @@ const historyDialog = document.getElementById('historyDialog');
 document.getElementById('historyBtn').addEventListener('click', () => {
   showHistory = true;
   renderHistory();
-  historyDialog.showModal();
+  openDialogKeepingScroll(historyDialog);
   updateKeyboardShift();
 });
 document.getElementById('historyClose').addEventListener('click', () => {
@@ -867,7 +877,10 @@ if (window.visualViewport) {
 document.addEventListener('focusin', updateKeyboardShift);
 document.addEventListener('focusout', () => setTimeout(updateKeyboardShift, 100));
 document.querySelectorAll('dialog').forEach(d => {
-  d.addEventListener('close', () => document.documentElement.style.setProperty('--kb-shift', '0px'));
+  d.addEventListener('close', () => {
+    document.body.classList.remove('keyboard-open');
+    document.documentElement.style.setProperty('--kb-shift', '0px');
+  });
 });
 
 applyLayout();
