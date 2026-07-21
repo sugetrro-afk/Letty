@@ -41,6 +41,25 @@
   }
   header h1 { font-size: 18px; }
   header .clock { color: var(--muted); font-size: 14px; }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+
+  /* 横型レイアウト: 左=商品 / 右=お会計 */
+  body.layout-wide main {
+    grid-template-columns: 1fr 1fr;
+    align-items: stretch;
+  }
+  body.layout-wide main {
+    height: calc(100dvh - 60px - 84px - env(safe-area-inset-bottom));
+  }
+  body.layout-wide .panel { height: 100%; min-height: 0; }
+  body.layout-wide .panel-body { height: auto; flex: 1; }
+  body.layout-wide .cart-items {
+    flex: 1; max-height: none;
+    display: grid; grid-template-columns: 1fr 1fr;
+    align-content: start;
+  }
+  body.layout-wide .cart-item { min-width: 0; }
+  body.layout-wide .product-btn .price { white-space: nowrap; }
   main {
     flex: 1;
     display: grid;
@@ -125,6 +144,18 @@
   }
   body.edit-mode .product-btn .del { display: block; }
   body.edit-mode .product-btn { border-style: dashed; }
+  .product-btn .edit-tools {
+    position: absolute; bottom: 4px; left: 0; right: 0;
+    display: none; justify-content: center; gap: 4px;
+  }
+  body.edit-mode .product-btn .edit-tools { display: flex; }
+  .product-btn .edit-tools button {
+    border: 1px solid var(--border); background: var(--panel);
+    border-radius: 6px; padding: 2px 8px; font-size: 12px;
+    color: var(--text); cursor: pointer; line-height: 1.4;
+  }
+  .product-btn .edit-tools button:hover { background: var(--bg); border-color: var(--accent); }
+  body.edit-mode .product-btn .price { margin-bottom: 22px; }
 
   /* カート */
   .cart-items { flex: 1; overflow-y: auto; }
@@ -198,7 +229,9 @@
   /* モーダル */
   dialog {
     border: none; border-radius: 12px; padding: 20px;
-    width: 320px; box-shadow: 0 10px 40px rgba(0,0,0,.2);
+    width: 320px; max-width: calc(100vw - 32px);
+    box-shadow: 0 10px 40px rgba(0,0,0,.2);
+    position: fixed; inset: 0; margin: auto;
   }
   dialog::backdrop { background: rgba(0,0,0,.3); }
   dialog h2 { font-size: 16px; margin-bottom: 14px; }
@@ -240,6 +273,14 @@
   .co-hint { color: var(--muted); font-size: 13px; margin-top: 16px; }
 
   /* 履歴 */
+  #historyDialog { width: 460px; padding: 0; display: none; flex-direction: column; max-height: 80vh; }
+  #historyDialog[open] { display: flex; }
+  .history-head {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 16px; border-bottom: 1px solid var(--border);
+  }
+  .history-head h2 { font-size: 16px; margin: 0; }
+  #historyBody { overflow-y: auto; }
   .history-item {
     padding: 10px 16px; border-bottom: 1px solid var(--border); font-size: 13px;
   }
@@ -275,7 +316,10 @@
 <body>
 <header>
   <h1>🧾 簡易レジ</h1>
-  <span class="clock" id="clock"></span>
+  <div class="header-right">
+    <span class="clock" id="clock"></span>
+    <button class="small-btn" id="layoutBtn" title="縦型/横型を切り替え">横型に切替</button>
+  </div>
 </header>
 <main>
   <section class="panel">
@@ -289,7 +333,6 @@
     </div>
     <div class="panel-body">
       <div class="product-grid" id="productGrid"></div>
-      <div id="historyList" style="display:none;"></div>
     </div>
   </section>
 
@@ -329,7 +372,7 @@
 </div>
 
 <dialog id="productDialog">
-  <h2>商品を追加</h2>
+  <h2 id="pDialogTitle">商品を追加</h2>
   <div class="field">
     <label>商品名</label>
     <input type="text" id="pName" placeholder="例: コーヒー">
@@ -346,6 +389,14 @@
     <button class="btn btn-cancel" id="pCancel">キャンセル</button>
     <button class="btn btn-primary" id="pSave">追加</button>
   </div>
+</dialog>
+
+<dialog id="historyDialog">
+  <div class="history-head">
+    <h2>会計履歴</h2>
+    <button class="small-btn" id="historyClose">閉じる</button>
+  </div>
+  <div id="historyBody"></div>
 </dialog>
 
 <div id="checkoutOverlay">
@@ -396,6 +447,11 @@ function renderProducts() {
     btn.dataset.id = p.id;
     btn.innerHTML = `
       <button class="del" title="削除">✕</button>
+      <div class="edit-tools">
+        <button class="move" data-dir="-1" title="前へ移動">◀</button>
+        <button class="edit" title="編集">✎</button>
+        <button class="move" data-dir="1" title="次へ移動">▶</button>
+      </div>
       <span class="qty-badge"></span>
       <div class="name"></div>
       <div class="price">${yen(p.price)}<span class="tax-badge">${p.tax}%</span></div>`;
@@ -411,6 +467,11 @@ function renderProducts() {
           cart = cart.filter(x => x.productId !== p.id);
           saveProducts(); renderProducts(); renderCart();
         }
+        return;
+      }
+      if (e.target.classList.contains('edit')) { openProductDialog(p); return; }
+      if (e.target.classList.contains('move')) {
+        moveProduct(p.id, Number(e.target.dataset.dir));
         return;
       }
       if (editMode) return;
@@ -432,7 +493,8 @@ function layoutProductGrid() {
   if (n === 0) { grid.style.gridTemplateColumns = ''; grid.style.gridTemplateRows = ''; return; }
   const W = grid.clientWidth || 1;
   const H = grid.clientHeight || 1;
-  const aspect = 1.3; // タイルの縦横比の目安(横長)
+  // タイルの縦横比の目安(横長)。横型は枠が細いので、より横長寄りにして段組みを抑える
+  const aspect = document.body.classList.contains('layout-wide') ? 1.8 : 1.3;
   let cols = Math.max(1, Math.round(Math.sqrt(n * W / (H * aspect))));
   cols = Math.min(cols, n);
   const rows = Math.ceil(n / cols);
@@ -594,14 +656,21 @@ document.getElementById('clearBtn').addEventListener('click', () => {
   }
 });
 
-// ---- 商品追加 ----
+// ---- 商品の追加・編集 ----
 const dialog = document.getElementById('productDialog');
-document.getElementById('addProductBtn').addEventListener('click', () => {
-  document.getElementById('pName').value = '';
-  document.getElementById('pPrice').value = '';
-  document.getElementById('pTax').value = '10';
+let editingId = null; // null なら新規追加
+
+function openProductDialog(p) {
+  editingId = p ? p.id : null;
+  document.getElementById('pDialogTitle').textContent = p ? '商品を編集' : '商品を追加';
+  document.getElementById('pSave').textContent = p ? '保存' : '追加';
+  document.getElementById('pName').value = p ? p.name : '';
+  document.getElementById('pPrice').value = p ? p.price : '';
+  document.getElementById('pTax').value = p ? p.tax : '10';
   dialog.showModal();
-});
+}
+
+document.getElementById('addProductBtn').addEventListener('click', () => openProductDialog(null));
 document.getElementById('pCancel').addEventListener('click', () => dialog.close());
 document.getElementById('pSave').addEventListener('click', () => {
   const name = document.getElementById('pName').value.trim();
@@ -609,9 +678,38 @@ document.getElementById('pSave').addEventListener('click', () => {
   const tax = Number(document.getElementById('pTax').value);
   if (!name || !(price >= 0)) { alert('商品名と価格を入力してください'); return; }
   if (!(tax >= 0)) { alert('税率は0以上の数値で入力してください'); return; }
-  products.push({ id: Date.now(), name, price, tax });
-  saveProducts(); renderProducts();
+  if (editingId !== null) {
+    const p = products.find(x => x.id === editingId);
+    if (p) Object.assign(p, { name, price, tax });
+  } else {
+    products.push({ id: Date.now(), name, price, tax });
+  }
+  saveProducts(); renderProducts(); renderCart();
   dialog.close();
+});
+
+// 商品の並び替え(dir: -1 で前へ、1 で次へ)
+function moveProduct(id, dir) {
+  const i = products.findIndex(x => x.id === id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= products.length) return;
+  [products[i], products[j]] = [products[j], products[i]];
+  saveProducts(); renderProducts();
+}
+
+// ---- 縦型/横型レイアウト切り替え ----
+let wideLayout = localStorage.getItem('pos.layout') === 'wide';
+
+function applyLayout() {
+  document.body.classList.toggle('layout-wide', wideLayout);
+  document.getElementById('layoutBtn').textContent = wideLayout ? '縦型に切替' : '横型に切替';
+  layoutProductGrid();
+}
+
+document.getElementById('layoutBtn').addEventListener('click', () => {
+  wideLayout = !wideLayout;
+  localStorage.setItem('pos.layout', wideLayout ? 'wide' : 'tall');
+  applyLayout();
 });
 
 // ---- 編集モード ----
@@ -622,16 +720,20 @@ document.getElementById('editModeBtn').addEventListener('click', e => {
 });
 
 // ---- 履歴 ----
-document.getElementById('historyBtn').addEventListener('click', e => {
-  showHistory = !showHistory;
-  e.target.classList.toggle('active', showHistory);
-  document.getElementById('productGrid').style.display = showHistory ? 'none' : 'grid';
-  document.getElementById('historyList').style.display = showHistory ? 'block' : 'none';
-  if (showHistory) renderHistory();
+const historyDialog = document.getElementById('historyDialog');
+document.getElementById('historyBtn').addEventListener('click', () => {
+  showHistory = true;
+  renderHistory();
+  historyDialog.showModal();
 });
+document.getElementById('historyClose').addEventListener('click', () => {
+  showHistory = false;
+  historyDialog.close();
+});
+historyDialog.addEventListener('close', () => { showHistory = false; });
 
 function renderHistory() {
-  const wrap = document.getElementById('historyList');
+  const wrap = document.getElementById('historyBody');
   wrap.innerHTML = '';
   if (history.length === 0) {
     wrap.innerHTML = '<div class="empty">会計履歴はまだありません</div>';
@@ -666,6 +768,7 @@ function tick() {
 }
 setInterval(tick, 1000); tick();
 
+applyLayout();
 renderProducts();
 renderCart();
 </script>
